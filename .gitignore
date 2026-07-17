@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+token.txt
+checkin_cache.json
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Runtime logs and captured traffic
+audit_logs/
+network_logs/
+run_logs/
+*.log
+*.jsonl
+
+# SQLite/runtime data
+*.db
+*.db-shm
+*.db-wal
+data/*
+!data/.gitkeep
+!data/logs/
+!data/logs/.gitkeep
+checkin-web/data/*
+!checkin-web/data/.gitkeep
+!checkin-web/data/logs/
+!checkin-web/data/logs/.gitkeep
+
+# Browser profiles / screenshots
+ChromeSwuLoginProfile/
+captcha.png
+*.har
+
