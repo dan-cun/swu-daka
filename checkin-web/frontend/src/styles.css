@@ -1,0 +1,284 @@
+:root {
+  color: #111;
+  background: #fff;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.checkin-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.checkin-form {
+  width: min(760px, calc(100vw - 40px));
+  display: grid;
+  grid-template-columns: 130px minmax(260px, 500px);
+  gap: 60px 34px;
+  align-items: center;
+}
+
+.field-label,
+.terms-link {
+  color: #222;
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: left;
+}
+
+.line-input {
+  width: 100%;
+  height: 78px;
+  border: 5px solid #050505;
+  padding: 0 18px;
+  outline: none;
+  background: #fff;
+}
+
+.line-input:focus {
+  box-shadow: inset 0 0 0 2px #555;
+}
+
+.agree-button {
+  justify-self: start;
+  width: 78px;
+  height: 36px;
+  border: 5px solid #050505;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.terms-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.auto-checkin-button {
+  min-width: 148px;
+  height: 36px;
+  border: 5px solid #050505;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.checkin-button {
+  grid-column: 2;
+  justify-self: end;
+  width: 215px;
+  height: 62px;
+  border: 5px solid #050505;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font-size: 19px;
+}
+
+.checkin-button:disabled,
+.auto-checkin-button:disabled {
+  cursor: not-allowed;
+  color: #777;
+  border-color: #777;
+}
+
+.status-text {
+  grid-column: 2;
+  margin: -28px 0 0;
+  color: #333;
+}
+
+.log-tail {
+  grid-column: 1 / -1;
+  max-height: 260px;
+  margin: -24px 0 0;
+  padding: 16px;
+  overflow: auto;
+  border: 3px solid #050505;
+  background: #fff;
+  color: #111;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.terms-modal {
+  position: relative;
+  width: min(560px, 100%);
+  border: 5px solid #050505;
+  background: #fff;
+  padding: 34px;
+}
+
+.terms-modal h2 {
+  margin: 0 0 18px;
+  font-size: 24px;
+}
+
+.terms-modal p {
+  margin: 0 0 14px;
+  line-height: 1.7;
+}
+
+.risk-text {
+  font-weight: 700;
+  color: #b00020;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 28px;
+}
+
+.modal-terms-link {
+  display: inline-block;
+  margin: 2px 0 20px;
+  color: #111;
+  font-weight: 700;
+}
+
+.modal-error {
+  color: #b00020;
+}
+
+.modal-agree {
+  width: 100%;
+  height: 54px;
+  border: 5px solid #050505;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.modal-agree:disabled {
+  cursor: wait;
+  color: #777;
+  border-color: #777;
+}
+
+.terms-page {
+  min-height: 100vh;
+  background: #fff;
+  color: #111;
+}
+
+.terms-topbar {
+  width: min(860px, calc(100vw - 36px));
+  margin: 0 auto;
+  padding: 34px 0 0;
+}
+
+.terms-topbar a {
+  color: #111;
+  font-weight: 700;
+}
+
+.terms-document {
+  width: min(860px, calc(100vw - 36px));
+  margin: 0 auto;
+  padding: 34px 0 80px;
+}
+
+.terms-document h1 {
+  margin: 0 0 22px;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.terms-document h2 {
+  margin: 34px 0 14px;
+  font-size: 22px;
+}
+
+.terms-document p,
+.terms-document li {
+  margin: 0 0 12px;
+  line-height: 1.82;
+  font-size: 16px;
+}
+
+.terms-document ol {
+  margin: 0 0 18px 22px;
+  padding: 0;
+}
+
+.terms-document pre {
+  margin: 14px 0;
+  padding: 16px;
+  border: 3px solid #050505;
+  overflow: auto;
+  background: #fff;
+}
+
+@media (max-width: 680px) {
+  .checkin-form {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .field-label,
+  .terms-link {
+    font-size: 16px;
+  }
+
+  .line-input {
+    height: 64px;
+  }
+
+  .checkin-button {
+    grid-column: 1;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .terms-actions {
+    grid-column: 1;
+    flex-wrap: wrap;
+  }
+
+  .status-text {
+    grid-column: 1;
+    margin: 0;
+  }
+
+  .log-tail {
+    grid-column: 1;
+    margin: 0;
+  }
+}

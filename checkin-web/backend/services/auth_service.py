@@ -11,7 +11,14 @@ def _utc_now() -> str:
 def list_users(db: Connection) -> list[dict]:
     rows = db.execute(
         """
-        SELECT id, username, display_name, student_no, created_at
+        SELECT
+            id,
+            username,
+            display_name,
+            student_no,
+            has_agreed_terms,
+            agreed_at,
+            created_at
         FROM users
         ORDER BY id DESC
         """
@@ -25,8 +32,16 @@ def create_user(db: Connection, payload: UserCreate) -> dict:
     try:
         cursor = db.execute(
             """
-            INSERT INTO users (username, display_name, student_no, password_hash, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (
+                username,
+                display_name,
+                student_no,
+                password_hash,
+                has_agreed_terms,
+                agreed_at,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, 0, NULL, ?)
             """,
             (payload.username, payload.display_name, payload.student_no, "", now),
         )
@@ -35,7 +50,14 @@ def create_user(db: Connection, payload: UserCreate) -> dict:
         raise ValueError("username already exists") from exc
     row = db.execute(
         """
-        SELECT id, username, display_name, student_no, created_at
+        SELECT
+            id,
+            username,
+            display_name,
+            student_no,
+            has_agreed_terms,
+            agreed_at,
+            created_at
         FROM users
         WHERE id = ?
         """,
@@ -73,3 +95,23 @@ def upsert_credential_placeholder(
     )
     db.commit()
 
+
+def mark_terms_agreed(db: Connection, user_id: int) -> dict:
+    agreed_at = _utc_now()
+    cursor = db.execute(
+        """
+        UPDATE users
+        SET has_agreed_terms = 1,
+            agreed_at = ?
+        WHERE id = ?
+        """,
+        (agreed_at, user_id),
+    )
+    if cursor.rowcount == 0:
+        raise ValueError("user not found")
+    db.commit()
+    return {
+        "user_id": user_id,
+        "has_agreed_terms": True,
+        "agreed_at": agreed_at,
+    }

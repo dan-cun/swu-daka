@@ -2,8 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlite3 import Connection
 
 from app.dependencies import get_db
-from app.schemas.users import CredentialCreate, UserCreate, UserRead
-from services.auth_service import create_user, list_users, upsert_credential_placeholder
+from app.schemas.users import CredentialCreate, TermsAgreementRead, UserCreate, UserRead
+from services.auth_service import (
+    create_user,
+    list_users,
+    mark_terms_agreed,
+    upsert_credential_placeholder,
+)
 
 router = APIRouter()
 
@@ -33,3 +38,10 @@ def put_credential(
         "detail": "credential storage is a placeholder; encryption will be implemented later",
     }
 
+
+@router.post("/{user_id}/terms/agree", response_model=TermsAgreementRead)
+def agree_terms(user_id: int, db: Connection = Depends(get_db)) -> TermsAgreementRead:
+    try:
+        return TermsAgreementRead(**mark_terms_agreed(db, user_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

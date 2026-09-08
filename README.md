@@ -1,210 +1,227 @@
 # 西南大学查寝打卡辅助工具
 
-一个面向本地自用场景的非官方查寝打卡辅助项目。项目包含旧版命令行工具，以及正在开发中的 FastAPI + React 网页界面，可完成统一认证登录、同步当日查寝任务、提交打卡请求和记录本地审计日志。
+本地自用的非官方查寝打卡辅助：自动登录统一认证（Chrome CDP + OCR 验证码）、自动同步当日查寝任务、定位校验、提交打卡，并生成脱敏审计日志。提供两条使用路径：
 
-> [!WARNING]
-> 本项目不是西南大学、钉钉或任何校内部门的官方产品。请仅使用本人合法持有并获准使用的账号，并遵守学校、平台及所在地适用规则。程序不能保证打卡成功，每次执行后都应前往官方系统核对最终状态。
+- **CLI**（核心链路，`login_and_checkin.py`）
+- **本地 Web 界面**（`checkin-web/`，对 CLI 的薄封装 + 每日 21:00 自动任务）
 
-## 当前状态
+> ⚠️ **声明**：本项目不是西南大学、钉钉或任何校内部门的官方产品。请仅使用本人合法持有并获准使用的账号，遵守学校、平台及所在地规则。工具不保证打卡成功，每次执行后都应在官方系统复核最终状态。详见 [checkin-web/docs/user_notice.md](checkin-web/docs/user_notice.md)。
 
-项目仍处于开发阶段，适合本机调试和受控测试，不适合部署到公网或多人共用环境。
+## 目录
 
-已经实现：
+- [一、使用前提](#一使用前提)
+- [二、快速开始（CLI）](#二快速开始cli)
+- [三、如何填入数据](#三如何填入数据)
+- [四、文件结构和作用](#四文件结构和作用)
+- [五、Web 端使用（可选）](#五web-端使用可选)
+- [六、已知限制](#六已知限制)
+- [七、排错](#七排错)
+- [八、安全与合规（摘要）](#八安全与合规摘要)
 
-- 使用 Chrome 完成统一认证登录，验证码识别失败时可转为人工处理
-- 同步当天查寝任务及表单元数据
-- 检查任务日期和已有签到状态，默认避免重复提交
-- 执行一次性打卡并生成本地审计日志
-- 提供 FastAPI 后端和 React 网页入口
-- 使用 SQLite 保存用户、凭据元数据和自动任务状态
-- 后端运行期间按本地时间每天 `21:00` 执行已启用的自动任务
+---
 
-尚未完成或需要改进：
+## 一、使用前提
 
-- 自动任务的校园网密码目前以临时明文形式保存在 SQLite 中
-- 后端 API 没有登录认证和访问控制
-- 日志列表、清理和部分管理页面仍为占位实现
-- 打卡运行记录尚未持久化
-- 前端部分中文文案仍需进行编码清理
-- 缺少生产级密钥管理、通知、任务队列和日志轮转
-
-## 项目结构
-
-```text
-.
-|-- login_and_checkin.py        # 旧版 CLI 入口
-|-- legacy/                     # 登录、任务同步和打卡实现
-|-- checkin-web/
-|   |-- backend/                # FastAPI 后端
-|   |-- frontend/               # React + TypeScript + Vite 前端
-|   |-- data/                   # 本地 SQLite 和日志目录，不提交运行数据
-|   `-- docs/                   # 架构、安全说明和用户须知
-`-- .gitignore                  # 敏感数据及构建产物忽略规则
-```
-
-## 环境要求
-
-- Windows 10/11
-- Python 3.11 或兼容版本
-- Google Chrome
-- Node.js 18 或更高版本
-- npm
-
-## 网页端启动
-
-### 1. 安装后端
-
-在项目根目录执行：
-
-```powershell
-cd checkin-web\backend
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m pip install requests playwright ddddocr
-```
-
-`ddddocr` 是可选依赖。未安装或识别失败时，可以在 Chrome 中手动处理验证码。
-
-### 2. 配置后端
-
-默认配置可以直接用于本地开发。如需调整数据目录、数据库或跨域来源，先在项目根目录创建本地环境文件：
-
-```powershell
-Copy-Item ..\.env.example ..\.env
-```
-
-可用变量：
-
-| 变量 | 默认值 | 用途 |
+| 项 | 要求 | 说明 |
 | --- | --- | --- |
-| `CHECKIN_WEB_ENV` | `local` | 当前运行环境名称 |
-| `CHECKIN_WEB_DATA_DIR` | `./data` | 运行数据目录 |
-| `CHECKIN_WEB_DATABASE_URL` | `sqlite:///./data/app.db` | SQLite 数据库地址 |
-| `CHECKIN_WEB_LOG_DIR` | `./data/logs` | 后端日志目录 |
-| `CHECKIN_WEB_CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 允许的前端来源 |
+| 操作系统 | Windows 10/11 | 登录自动化基于 Windows + Chrome |
+| Google Chrome | 64-bit 稳定版 | 登录走 Chrome CDP（端口 9222）驱动独立 profile；其他浏览器未测试 |
+| Python | 3.10+（推荐 3.11） | 跑打卡链路与 Web 后端，经 `py` 启动器调用 |
+| pip 依赖 | 见 [配置.md](配置.md) | requests / playwright / ddddocr（CLI）+ fastapi / uvicorn / pydantic（Web） |
+| Node.js | 18+（仅 Web 端） | React 前端需要；只用 CLI 可不装 |
+| 时间 | 当日打卡时段内 | 默认任务 21:00–23:30，以服务端任务为准 |
+| 位置 | 签到点半径内 | 默认签到点为融汇南路8号、半径 800 米；越界 verify 拒绝提交 |
+| 账号 | 本人合法持有的校园网账号 | 不代他人打卡 |
 
-不要在 `.env.example` 中填写真实账号或密码。`.env` 已被 Git 忽略。
-
-### 3. 启动后端
-
-继续在 `checkin-web\backend` 目录执行：
+一键安装/校验环境（幂等，可重复执行）：
 
 ```powershell
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --env-file ..\.env
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-健康检查和交互式 API 文档：
+完整依赖清单、实测版本、端口、环境变量与 FAQ 见 [配置.md](配置.md)。
 
-- `http://127.0.0.1:8000/health`
-- `http://127.0.0.1:8000/docs`
-
-### 4. 启动前端
-
-另开一个 PowerShell 窗口，在项目根目录执行：
+## 二、快速开始（CLI）
 
 ```powershell
-cd checkin-web\frontend
-npm ci
-npm run dev
-```
+# 1) 提供账号（当前终端有效，不落盘、不进命令历史）
+$env:SWU_USERNAME = "你的账号"
+$env:SWU_PASSWORD = "你的密码"
 
-浏览器访问 `http://127.0.0.1:5173`。
+# 2) 打卡：登录 → 同步今日任务 → 定位校验 → 提交
+py -3.11 login_and_checkin.py --cqtj-checkin
 
-如后端不在默认地址，可以在启动前设置：
-
-```powershell
-$env:VITE_API_BASE = "http://127.0.0.1:8000"
-npm run dev
-```
-
-## 命令行使用
-
-旧版 CLI 可以独立运行。先安装依赖并检查本机环境：
-
-```powershell
-py -3.11 -m pip install requests playwright ddddocr
+# 环境自检（不发网络请求）
 py -3.11 login_and_checkin.py --env-check
 ```
 
-使用环境变量提供账号信息，避免密码出现在命令历史和进程参数中：
+常用参数组合：
 
-```powershell
-$env:SWU_USERNAME = "你的账号"
-$env:SWU_PASSWORD = "你的密码"
-py -3.11 login_and_checkin.py --cqtj-checkin
-```
+| 参数 | 作用 |
+| --- | --- |
+| `--cqtj-checkin` | 同步今日查寝任务并打卡（已签到 / 越界 / 今日无任务会自动中止，不重复提交） |
+| `--sync-cqtj` | 只同步任务元数据，不提交（验证/调试用） |
+| `--login-only` | 只登录、刷新 Token |
+| `--token xxx` | 用已有 Token 跳过登录 |
+| `--monitor-chrome` | 网络监听模式：抓取 baida 接口并缓存表单元数据（排障用） |
+| `--force-submit` | 即使已签到也强制提交（不建议） |
 
-只登录、不提交打卡：
+## 三、如何填入数据
 
-```powershell
-py -3.11 login_and_checkin.py --login-only
-```
+### 3.1 账号 / 密码（唯一必须填的数据）
 
-只同步当天任务元数据：
+| 路径 | 填入方式 | 存储位置 |
+| --- | --- | --- |
+| CLI（推荐） | 环境变量 `SWU_USERNAME` / `SWU_PASSWORD` | 不存储，仅当前进程有效 |
+| CLI（不推荐） | `--username` / `--password` 参数 | 会留在命令历史 |
+| Web | 页面输入后点"开启每日 21:00 自动打卡" | `checkin-web/data/app.db`（当前临时明文，见已知限制） |
 
-```powershell
-py -3.11 login_and_checkin.py --sync-cqtj
-```
+**不要**硬编码进源码、**不要**提交进 Git、**不要**发给任何人。
 
-查看全部参数：
+### 3.2 打卡任务参数（正常情况下无需手填）
 
-```powershell
-py -3.11 login_and_checkin.py --help
-```
+- `form_id` / `cqfbid` / `business_key`：`--cqtj-checkin` 会从当日任务自动同步（`cqtj/getTransitionByToday` → `form-instance/select`），并写入当日缓存 `checkin_cache.json`（**仅当天有效**，跨天自动失效）。
+- 自动同步拿不到时（如当日未发布任务），可手动指定 `--form-id` / `--cqfbid` / `--business-key`（来源：手机钉钉抓包，或历史审计日志）。
+- 签到位置：默认值在 [legacy/config.py](legacy/config.py)（`DEFAULT_LAT/LNG/ADDRESS/QSQDDD/QDBJ`，当前为融汇南路8号、半径 800 米）。签到点变化时修改该文件，或用 `--lat` / `--lng` / `--address` 等参数临时覆盖。
+- `verify` 按上述坐标做范围校验，**不在范围内一定不提交**。
 
-## 本地数据与安全
+### 3.3 自动生成的运行文件（无需手填，可安全删除）
 
-以下文件可能包含账号、Token、学号、姓名、请求报文或其他敏感信息，禁止提交到 GitHub 或发送给无关人员：
+| 文件 | 说明 |
+| --- | --- |
+| `token.txt` | 最新登录 Token（短命，约一天）；过期后重跑命令自动重新登录 |
+| `checkin_cache.json` | 当日表单元数据缓存 |
+| `audit_logs/*.jsonl` | 每次运行的完整审计日志（登录/同步/校验/提交/本地判定），敏感字段已脱敏 |
+| `network_logs/*.jsonl` | 监听模式下的网络抓包 |
+
+### 3.4 Web 端数据
+
+- `checkin-web/data/app.db`：后端首次启动时自动创建，三张表：
+  - `users`（账号、展示名、学号、用户须知确认状态）
+  - `credentials`（校园账号凭据，当前临时明文 `plain-temporary`）
+  - `auto_checkin_schedules`（每日 21:00 自动任务：开关、下次执行时间、最近结果）
+- 可选配置：`Copy-Item checkin-web\.env.example checkin-web\.env`，可调整数据目录、数据库地址、日志目录、CORS 来源（变量表见 [配置.md](配置.md)）。
+
+## 四、文件结构和作用
 
 ```text
-.env
-token.txt
-checkin_cache.json
-audit_logs/
-network_logs/
-run_logs/
-ChromeSwuLoginProfile/
-checkin-web/data/*.db
+C:\kaifa\tool\打卡\
+├── README.md                   # 本文件：全局介绍
+├── 配置.md                      # 运行环境配置（依赖/端口/环境变量/FAQ）
+├── install.ps1                 # 一键环境安装脚本（幂等，可 -SkipWeb / -PipMirror）
+├── login_and_checkin.py        # CLI 入口（薄封装 → legacy.cli.main）
+├── .gitignore                  # 敏感数据/构建产物忽略规则
+│
+├── legacy/                     # ★ 打卡链路核心实现（CLI）
+│   ├── cli.py                  # 命令行参数、主流程编排（登录→同步→打卡）
+│   ├── config.py               # 全部默认值：账号环境变量名、表单 ID、签到位置、登录 URL、钉钉 UA/请求头
+│   ├── browser_login.py        # Chrome CDP 登录：CAS→uaaap→IDM，验证码 OCR（ddddocr）/手动兜底
+│   ├── swu_api.py              # API 链路：用户信息 / 当日任务同步 / getDormitory / verify / form-instance/save
+│   ├── monitor.py              # 网络监听模式：抓取 baida 接口、缓存表单元数据（排障用）
+│   └── common.py               # 环境自检、Chrome profile 管理、缓存、审计日志、敏感脱敏
+│
+├── audit_logs/                 # 打卡审计日志（自动产生；含个人信息，勿外传）
+├── network_logs/               # 监听模式网络抓包（自动产生）
+├── run_logs/                   # 手动运行输出日志（自动产生）
+│
+└── checkin-web/                # Web 端（FastAPI + React；CLI 的薄封装 + 自动任务）
+    ├── .env.example            # 可选后端配置模板
+    ├── backend/
+    │   ├── requirements.txt    # fastapi / uvicorn[standard] / pydantic
+    │   ├── app/
+    │   │   ├── main.py         # FastAPI 入口：CORS、/health、挂载路由、启动调度器
+    │   │   ├── dependencies.py # get_db（SQLite 连接）
+    │   │   ├── routers/        # users / checkin / settings
+    │   │   └── schemas/        # users / checkin 的 Pydantic 模型
+    │   ├── services/
+    │   │   ├── checkin_service.py  # ★ 打卡执行（subprocess 调 CLI）+ 21:00 自动任务调度
+    │   │   └── auth_service.py     # 用户创建 / 凭据保存 / 须知确认
+    │   ├── storage/
+    │   │   ├── database.py     # init_database / connect
+    │   │   └── models.py       # users / credentials / auto_checkin_schedules 表结构
+    │   ├── core/               # config（环境变量）/ security / logging
+    │   └── tests/              # 结构测试（pytest）
+    ├── frontend/
+    │   ├── package.json        # React 19 + TypeScript + Vite 6
+    │   └── src/
+    │       ├── App.tsx         # 路由：/ → CheckinPage，/terms → TermsPage
+    │       ├── pages/CheckinPage.tsx       # ★ 主页面：一键打卡、自动任务、状态展示
+    │       ├── pages/TermsPage.tsx         # 用户须知页
+    │       ├── components/TermsConsentModal.tsx  # 须知确认弹窗
+    │       └── services/api.ts             # fetch 封装（默认 http://127.0.0.1:8000）
+    ├── docs/
+    │   ├── security.md         # 安全规则（含加密目标方案）
+    │   └── user_notice.md      # 用户须知 / 免责声明
+    ├── scripts/                # 预留（空）
+    └── data/                   # 运行数据（自动产生，Git 忽略）
+        ├── app.db              # SQLite（首次启动创建）
+        └── logs/
 ```
 
-这些路径已写入 `.gitignore`，但提交前仍应执行：
+## 五、Web 端使用（可选）
+
+Web 端对 CLI 是**薄封装**：后端 `checkin_service` 用 subprocess 调起 `login_and_checkin.py --cqtj-checkin`（240 秒超时），回填结果与日志尾部；调度线程每 15 秒轮询一次数据库，到点（默认 21:00）对已启用用户自动打卡。
 
 ```powershell
-git status --short
-git diff --cached
-```
-
-重要安全限制：
-
-- 自动任务当前会把校园网密码以 `plain-temporary` 形式写入 `checkin-web/data/app.db`。在完成加密存储前，不要启用真实账号的长期自动任务。
-- 后端接口没有身份验证。必须保持绑定 `127.0.0.1`，不要使用 `0.0.0.0`，不要配置公网端口转发。
-- 日志可能包含个人信息。排查完成后应及时清理，并避免上传完整日志或截图。
-- 怀疑凭据泄露时，应立即修改密码、删除本地 Token/缓存/数据库，并检查 Git 暂存区和提交历史。
-
-更完整的说明见：
-
-- [`checkin-web/docs/security.md`](checkin-web/docs/security.md)
-- [`checkin-web/docs/user_notice.md`](checkin-web/docs/user_notice.md)
-- [`checkin-web/docs/architecture.md`](checkin-web/docs/architecture.md)
-
-## 开发检查
-
-后端结构测试：
-
-```powershell
+# 后端（在项目根目录）
 cd checkin-web\backend
-python -m pip install pytest
-python -m pytest
-```
+py -3.11 -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# → http://127.0.0.1:8000/health 、 http://127.0.0.1:8000/docs
 
-前端类型检查与构建：
-
-```powershell
+# 前端（另开终端，在项目根目录）
 cd checkin-web\frontend
-npm run build
+npm run dev
+# → http://127.0.0.1:5173
 ```
 
-## 许可证
+主页面（CheckinPage）功能：
 
-本仓库当前尚未包含开源许可证。在添加 `LICENSE` 之前，默认著作权规则仍然适用。公开分发前还应确认学校和相关平台规则是否允许公开其中的接口信息、应用标识和使用方式。
+- 输入账号/密码 → **一键打卡**（实时显示状态与日志尾部）
+- **开启每日 21:00 自动打卡**（保存凭据并写入调度表；后端到点自动执行）
+- 使用须知强制确认（弹窗 + `/terms` 页，本地记录确认状态）
+
+主要 API：
+
+| 方法 & 路径 | 用途 |
+| --- | --- |
+| `POST /api/checkin/runs` | 一键打卡（body：`school_username` / `school_password`） |
+| `GET /api/checkin/auto` | 查询自动任务状态（各用户开关、下次执行、最近结果） |
+| `POST /api/checkin/auto` | 开启自动任务（存凭据 + 写调度） |
+| `POST /api/checkin/auto/users/{username}` | 为已存凭据的用户开启自动任务 |
+| `GET/POST /api/users` | 用户列表 / 新建用户 |
+| `PUT /api/users/{id}/credential` | 保存凭据（占位：临时明文） |
+| `GET /api/settings` | 后端运行配置 |
+| `GET /api/checkin/runs` | 占位（运行历史尚未持久化） |
+
+## 六、已知限制
+
+- 自动任务的凭据目前是 SQLite **临时明文**（`plain-temporary`）；长期自动打卡前应先完成加密存储（目标方案见 [security.md](checkin-web/docs/security.md)）。
+- 打卡运行历史尚未持久化（`GET /api/checkin/runs` 为占位）；事后排查依赖 `audit_logs/`。
+- 后端 API **无认证**：只允许绑定 `127.0.0.1`，禁止公网暴露或端口转发。
+
+## 七、排错
+
+| 现象 | 处理 |
+| --- | --- |
+| 打卡失败、原因不明 | 打开最新的 `audit_logs/*.jsonl`：看 `response_verify`（定位）与 `response_form_instance_save` + `local_result`（提交结果） |
+| "任务已签到，不重复提交" | 服务端已记录今日打卡，去官方系统核对；确需强制再加 `--force-submit` |
+| "不在签到范围内" | 你不在签到点附近（默认位置见 `legacy/config.py`），调整位置参数或确认所在位置 |
+| "今日查寝任务为空" | 服务端当天未发布任务（如查询过早），稍后重试 |
+| 验证码识别失败 | ddddocr 自动重试最多 8 次；仍失败则重跑（会弹 Chrome 窗口，可手动处理） |
+| Token 失效 | 无需处理，重跑打卡命令会自动重新登录 |
+| 登录卡在统一认证/IDM 页 | 脚本会等待 60 秒供手动处理；也可先用 `--monitor-chrome` 抓包定位 |
+| 环境问题（缺依赖/端口占用/GBK 乱码等） | [配置.md](配置.md) §8 FAQ |
+
+## 八、安全与合规（摘要）
+
+以下文件含敏感信息，**已 Git 忽略，禁止提交、上传或外发**：
+
+```text
+token.txt   checkin_cache.json   .env
+audit_logs/   network_logs/   run_logs/
+checkin-web/data/*.db   %TEMP%\ChromeSwuLoginProfile   captcha.png
+```
+
+- 审计日志已对 token/密码/cookie/session 脱敏，但仍含个人信息（学号、姓名、位置），定期清理。
+- 怀疑凭据泄露时：改密码 → 删除 token/缓存/数据库 → 检查 Git 暂存区与提交历史。
+- 更完整说明：[security.md](checkin-web/docs/security.md) · [user_notice.md](checkin-web/docs/user_notice.md)

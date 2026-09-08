@@ -11,6 +11,7 @@ class Settings:
     data_dir: Path
     database_path: Path
     log_dir: Path
+    cors_origins: tuple[str, ...]
 
 
 def _resolve_path(value: str | None, base_dir: Path, default: Path) -> Path:
@@ -20,6 +21,13 @@ def _resolve_path(value: str | None, base_dir: Path, default: Path) -> Path:
     if not path.is_absolute():
         return base_dir / path
     return path
+
+
+def _split_csv(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+    if not value:
+        return default
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    return items or default
 
 
 @lru_cache
@@ -39,4 +47,8 @@ def get_settings() -> Settings:
         data_dir=data_dir,
         database_path=database_path,
         log_dir=log_dir,
+        cors_origins=_split_csv(
+            os.getenv("CHECKIN_WEB_CORS_ORIGINS"),
+            ("http://127.0.0.1:5173", "http://localhost:5173"),
+        ),
     )
