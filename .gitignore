@@ -53,3 +53,6 @@ ChromeSwuLoginProfile/
 captcha.png
 *.har
 
+# 本地交接/备忘文档（含明文账号，绝不入库）
+交接文档*.md
+
