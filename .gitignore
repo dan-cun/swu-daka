@@ -13,6 +13,10 @@ dist/
 build/
 .vite/
 
+# Executables (打卡助手.exe 构建产物)
+*.exe
+*.spec
+
 # Local env and secrets
 .env
 .env.*
