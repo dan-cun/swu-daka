@@ -19,6 +19,7 @@
 - [七、已知限制](#七已知限制)
 - [八、排错](#八排错)
 - [九、安全与合规（摘要）](#九安全与合规摘要)
+- [十、许可与声明](#十许可与声明)
 
 ---
 
@@ -250,3 +251,9 @@ checkin-web/data/*.db   %TEMP%\ChromeSwuLoginProfile   captcha.png
 - 审计日志已对 token/密码/cookie/session 脱敏，但仍含个人信息（学号、姓名、位置），定期清理。
 - 怀疑凭据泄露时：改密码 → 删除 token/缓存/数据库 → 检查 Git 暂存区与提交历史。
 - 更完整说明：[security.md](checkin-web/docs/security.md) · [user_notice.md](checkin-web/docs/user_notice.md)
+
+## 十、许可与声明
+
+本项目以 [《打卡助手》使用协议 v1.0](LICENSE) 发布：仅供学习与技术研究、**不可牟利**、
+修改或再分发（含编译产物）必须显著署名出处且不得删除声明；使用后果自负。
+技术讨论 / 问题反馈：QQ 1224145544。
