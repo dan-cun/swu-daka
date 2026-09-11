@@ -1,0 +1,80 @@
+diff --git a/legacy/cli.py b/legacy/cli.py
+index 77920de..a09d170 100644
+--- a/legacy/cli.py
++++ b/legacy/cli.py
+@@ -7,6 +7,7 @@ from datetime import datetime
+ 
+ from .config import *
+ from .browser_login import do_login
++from .http_login import do_login_http
+ from .common import load_checkin_meta, make_audit_log_path, mask_secret, print_env_check
+ from .monitor import monitor_chrome_network
+ from .swu_api import do_checkin, fetch_user_info, sync_cqtj_checkin_meta
+@@ -83,6 +84,8 @@ def parse_args():
+     # 外部提供 token, 跳过登录
+     p.add_argument("--token", default=None, help="已有 Token, 直接签到 (跳过登录)")
+     p.add_argument("--force-login", action="store_true", help="忽略 token.txt 缓存, 强制重新登录")
++    p.add_argument("--http-login", action="store_true",
++                   help="纯 HTTP 客户端登录: 浏览器只走 SSO, 登录 POST 交给 requests (绕开 idm 侧 WAF 对浏览器 POST 的拦截)")
+ 
+     return p.parse_args()
+ 
+@@ -136,25 +139,41 @@ def main():
+                     token = cached
+                     print(f"[i] 复用缓存 Token: {mask_secret(cached)} (登录态仍有效, 跳过登录)")
+         if not token:
+-            if args.auto_login and (not args.username or not args.password):
+-                print("[!] --auto-login 需要账号密码。请设置环境变量 SWU_USERNAME/SWU_PASSWORD，或使用 --username/--password。")
+-                sys.exit(1)
+-            if args.auto_login:
+-                print(f"[i] 自动登录模式, 账号: {args.username}")
++            if args.http_login:
++                if not args.username or not args.password:
++                    print("[!] --http-login 需要账号密码。请设置环境变量 SWU_USERNAME/SWU_PASSWORD，或使用 --username/--password。")
++                    sys.exit(1)
++                print(f"[i] 纯 HTTP 客户端登录模式, 账号: {args.username}")
++                token = asyncio.run(
++                    do_login_http(
++                        args.username,
++                        args.password,
++                        chrome_exe=args.chrome_exe,
++                        debug_port=args.debug_port,
++                        user_data_dir=args.user_data_dir,
++                        fresh_profile=not args.keep_profile,
++                    )
++                )
+             else:
+-                print("[i] 手动登录模式: 请在弹出的 Chrome 中输入账号/密码/验证码并登录")
+-            token = asyncio.run(
+-                do_login(
+-                    args.username if args.auto_login else "",
+-                    args.password if args.auto_login else "",
+-                    chrome_exe=args.chrome_exe,
+-                    debug_port=args.debug_port,
+-                    user_data_dir=args.user_data_dir,
+-                    fresh_profile=not args.keep_profile,
+-                    manual=not args.auto_login,
+-                    manual_timeout=args.manual_timeout,
++                if args.auto_login and (not args.username or not args.password):
++                    print("[!] --auto-login 需要账号密码。请设置环境变量 SWU_USERNAME/SWU_PASSWORD，或使用 --username/--password。")
++                    sys.exit(1)
++                if args.auto_login:
++                    print(f"[i] 自动登录模式, 账号: {args.username}")
++                else:
++                    print("[i] 手动登录模式: 请在弹出的 Chrome 中输入账号/密码/验证码并登录")
++                token = asyncio.run(
++                    do_login(
++                        args.username if args.auto_login else "",
++                        args.password if args.auto_login else "",
++                        chrome_exe=args.chrome_exe,
++                        debug_port=args.debug_port,
++                        user_data_dir=args.user_data_dir,
++                        fresh_profile=not args.keep_profile,
++                        manual=not args.auto_login,
++                        manual_timeout=args.manual_timeout,
++                    )
+                 )
+-            )
+         if not token:
+             print("\n[!] 登录失败, 未获取到 Token")
+             sys.exit(1)
