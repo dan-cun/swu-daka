@@ -88,7 +88,20 @@ async def _refresh_captcha(page):
     return False
 
 
+async def _human_type(page, selector: str, text: str,
+                      min_delay: int = 110, max_delay: int = 260) -> None:
+    """模拟真人逐字输入: 点击聚焦→清空→每字符 110~260ms 随机间隔(±键间思考)。
+    整串瞬填(page.fill)会被统一认证风控判定为脚本输入, 触发验证码循环拒绝。"""
+    import random
+    await page.click(selector)
+    await asyncio.sleep(random.uniform(0.15, 0.35))
+    await page.fill(selector, "")
+    await page.type(selector, text, delay=random.randint(min_delay, max_delay))
+    await asyncio.sleep(random.uniform(0.35, 0.8))
+
+
 async def login_once(page, ocr, username: str, password: str) -> bool:
+    import random
     await page.wait_for_selector("#loginName", timeout=60000)
     # 清掉上一次提交遗留的"验证码错误"图标(tishi): 只点验证码图不会重置它,
     # 否则本次即使输对也会被残留状态误判失败 → 陷入"输入→只刷新→永不点登录"死循环。
@@ -96,10 +109,11 @@ async def login_once(page, ocr, username: str, password: str) -> bool:
         "() => { const t = document.getElementById('tishi');"
         " if (t) t.setAttribute('src', ''); }"
     )
-    await page.fill("#loginName", "")
-    await page.fill("#loginName", username)
-    await page.fill("#password", "")
-    await page.fill("#password", password)
+    # —— 人速输入账号/密码, 字段间随机停顿 ——
+    await _human_type(page, "#loginName", username)
+    await asyncio.sleep(random.uniform(0.5, 1.1))
+    await _human_type(page, "#password", password)
+    await asyncio.sleep(random.uniform(0.5, 1.0))
 
     captcha_el = await page.query_selector("#kaptchaImage")
     if not captcha_el:
@@ -129,13 +143,13 @@ async def login_once(page, ocr, username: str, password: str) -> bool:
         await _refresh_captcha(page)
         return False
 
-    await page.fill("#validateCode", "")
-    await page.type("#validateCode", code, delay=50)
+    await asyncio.sleep(random.uniform(0.4, 0.9))
+    await _human_type(page, "#validateCode", code)
     # 主动失焦触发页面异步校验, 轮询"本次"的校验结果, 不读残留/未刷新的旧状态
     await page.evaluate("() => { const v = document.getElementById('validateCode'); if (v) v.blur(); }")
     captcha_bad = None
-    for _ in range(16):
-        await asyncio.sleep(0.25)
+    for _ in range(24):
+        await asyncio.sleep(0.3)
         tishi_src = await page.evaluate(
             "() => document.getElementById('tishi')?.getAttribute('src') || ''"
         )
@@ -150,10 +164,12 @@ async def login_once(page, ocr, username: str, password: str) -> bool:
         await _refresh_captcha(page)
         return False
     if captcha_bad is None:
-        # 页面无本地异步校验反馈(图标不更新): 不因此放弃, 直接提交由服务端裁决;
-        # 真错则 detect_login_failure/下一轮重来。
-        await asyncio.sleep(1)
-    print("[*] 提交登录...")
+        # 页面没有本地异步校验图标反馈: 等一拍再交给服务端裁决(该站点无预校验)
+        print("[i] 无本地校验图标, 直接提交由服务端校验")
+        await asyncio.sleep(random.uniform(0.8, 1.3))
+    else:
+        print("[OK] 验证码校验通过, 点击登录...")
+        await asyncio.sleep(random.uniform(0.6, 1.2))
     await page.click("#button")
     return True
 

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import os
 from datetime import datetime
 
@@ -78,6 +78,15 @@ async def monitor_chrome_network(
                 body_data = data.get("data") if isinstance(data, dict) else None
                 if body_data and not token_state["value"]:
                     token_state["value"] = body_data
+                if token_state["value"]:
+                    # 手动登录模式下捕获到 token 即落盘, 供后续 --token 续签签到
+                    try:
+                        with open(os.path.join(PROJECT_ROOT, "token.txt"), "w",
+                                  encoding="utf-8") as f:
+                            f.write(token_state["value"])
+                        print("[OK] Token 已捕获并保存到 token.txt")
+                    except Exception:
+                        pass
 
             record = {
                 "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
