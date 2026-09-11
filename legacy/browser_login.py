@@ -175,16 +175,23 @@ async def login_once(page, ocr, username: str, password: str) -> bool:
 
 
 async def do_login(
-    username: str,
-    password: str,
+    username: str = "",
+    password: str = "",
     chrome_exe: str | None = None,
     debug_port: int = DEBUG_PORT,
     user_data_dir: str = USER_DATA_DIR,
     fresh_profile: bool = True,
+    manual: bool = True,
+    manual_timeout: int = 300,
 ) -> str | None:
-    """执行完整登录流程, 返回 fighter-auth-token."""
+    """打开统一认证登录页, 捕获并返回 fighter-auth-token.
+
+    manual=True(默认): 脚本只导航到登录页, 账号/密码/验证码由人手动输入
+    并点击登录, 脚本只监听 exchange-token 捕获凭证(机器瞬填易触发认证风控,
+    手动输入实测稳定)。manual=False: 走 login_once 机器自动输入(--auto-login)。
+    """
     require_playwright()
-    ocr = load_ocr()
+    ocr = None if manual else load_ocr()
     chrome_proc = launch_chrome(chrome_exe, debug_port, user_data_dir, fresh_profile)
     token = {"value": None}
 
@@ -265,6 +272,41 @@ async def do_login(
 
         await asyncio.sleep(2)
 
+        # ===== 手动模式: 账号/密码/验证码由人输入, 脚本只等 token =====
+        if manual:
+            mins = max(1, manual_timeout // 60)
+            print("\n" + "=" * 52)
+            print("  请在弹出的 Chrome 窗口中【手动输入】账号、密码、验证码，")
+            print("  确认无误后点击登录按钮。脚本只负责捕获登录凭证(Token)。")
+            print(f"  等待你完成登录, 最长 {mins} 分钟……")
+            print("=" * 52)
+            waited = 0
+            while waited < manual_timeout:
+                if token["value"]:
+                    break
+                failure = await detect_login_failure(page)
+                if failure:
+                    print(f"[!] 登录失败: {failure}")
+                    print("    请重新输入并重试, 脚本继续等待……")
+                    await asyncio.sleep(3)
+                    waited += 3
+                    continue
+                await asyncio.sleep(0.5)
+                waited += 0.5
+            if not token["value"]:
+                print("[!] 等待超时, 未完成登录")
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            if chrome_proc:
+                try:
+                    chrome_proc.terminate()
+                except Exception:
+                    pass
+            return token["value"]
+
+        # ===== 自动模式 (--auto-login): 机器输入 + OCR =====
         for attempt in range(1, MAX_CAPTCHA_RETRY + 1):
             if token["value"]:
                 break

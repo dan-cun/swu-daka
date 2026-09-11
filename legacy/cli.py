@@ -1,6 +1,7 @@
-﻿import argparse
+import argparse
 import asyncio
 import json
+import os
 import sys
 from datetime import datetime
 
@@ -75,8 +76,13 @@ def parse_args():
 
     # 仅登录不签到
     p.add_argument("--login-only", action="store_true", help="只登录, 不签到")
+    p.add_argument("--auto-login", action="store_true",
+                   help="机器自动输入账号密码+OCR验证码 (默认: 人工手动输入, 脚本只等 token)")
+    p.add_argument("--manual-timeout", type=int, default=300,
+                   help="手动登录模式等待秒数, 默认 300")
     # 外部提供 token, 跳过登录
     p.add_argument("--token", default=None, help="已有 Token, 直接签到 (跳过登录)")
+    p.add_argument("--force-login", action="store_true", help="忽略 token.txt 缓存, 强制重新登录")
 
     return p.parse_args()
 
@@ -114,20 +120,41 @@ def main():
         token = args.token
         print(f"[i] 使用外部提供的 Token: {mask_secret(token)}")
     else:
-        if not args.username or not args.password:
-            print("[!] 缺少登录账号或密码。请设置环境变量 SWU_USERNAME/SWU_PASSWORD，或使用 --username/--password。")
-            sys.exit(1)
-        print(f"[i] 开始登录, 账号: {args.username}")
-        token = asyncio.run(
-            do_login(
-                args.username,
-                args.password,
-                chrome_exe=args.chrome_exe,
-                debug_port=args.debug_port,
-                user_data_dir=args.user_data_dir,
-                fresh_profile=not args.keep_profile,
+        # 优先复用缓存 token: 人工手动登录一次后, 有效期内每日打卡不再需要登录
+        token = None
+        if os.path.exists("token.txt") and not args.force_login:
+            try:
+                cached = open("token.txt", encoding="utf-8").read().strip()
+            except Exception:
+                cached = ""
+            if cached:
+                try:
+                    info = fetch_user_info(cached)
+                except Exception:
+                    info = {}
+                if info.get("username") or info.get("loginName"):
+                    token = cached
+                    print(f"[i] 复用缓存 Token: {mask_secret(cached)} (登录态仍有效, 跳过登录)")
+        if not token:
+            if args.auto_login and (not args.username or not args.password):
+                print("[!] --auto-login 需要账号密码。请设置环境变量 SWU_USERNAME/SWU_PASSWORD，或使用 --username/--password。")
+                sys.exit(1)
+            if args.auto_login:
+                print(f"[i] 自动登录模式, 账号: {args.username}")
+            else:
+                print("[i] 手动登录模式: 请在弹出的 Chrome 中输入账号/密码/验证码并登录")
+            token = asyncio.run(
+                do_login(
+                    args.username if args.auto_login else "",
+                    args.password if args.auto_login else "",
+                    chrome_exe=args.chrome_exe,
+                    debug_port=args.debug_port,
+                    user_data_dir=args.user_data_dir,
+                    fresh_profile=not args.keep_profile,
+                    manual=not args.auto_login,
+                    manual_timeout=args.manual_timeout,
+                )
             )
-        )
         if not token:
             print("\n[!] 登录失败, 未获取到 Token")
             sys.exit(1)

@@ -1,6 +1,6 @@
 # 西南大学查寝打卡辅助工具
 
-本地自用的非官方查寝打卡辅助：自动登录统一认证（Chrome CDP + OCR 验证码）、自动同步当日查寝任务、定位校验、提交打卡，并生成脱敏审计日志。提供三条使用路径：
+本地自用的非官方查寝打卡辅助：统一认证登录默认**人工手动输入**（脚本弹 Chrome 导航到登录页，只捕获 Token 不代填，避免机器瞬填触发认证风控；登录态有效时直接复用缓存 Token 免登录）、自动同步当日查寝任务、定位校验、提交打卡，并生成脱敏审计日志。提供三条使用路径：
 
 - **打卡助手 GUI**（`打卡助手.exe`，双击即用：一次打卡 / 每日自动打卡，推荐普通使用）
 - **CLI**（核心链路，`login_and_checkin.py`）
@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | 操作 | 说明 |
 | --- | --- |
 | 校园网账号 / 校园网密码 | 输入后自动回填（来自上次保存）；点"自动打卡"时保存到本机 |
-| **一次打卡** | 立即执行 登录→同步→打卡（弹 Chrome 窗口，验证码自动识别，失败可人工处理），窗口内实时显示日志 |
+| **一次打卡** | 立即执行：登录态有效直接复用 Token；否则弹 Chrome 到登录页，**账号/密码/验证码由你手动输入**，脚本捕获 Token 后自动继续同步→打卡，窗口内实时显示日志 |
 | **自动打卡** | 创建 Windows 计划任务（`SWU_Daka_Auto`），按设定时间（默认 21:00）每天自动执行，**无需保持窗口打开** |
 | **关闭自动打卡** | 删除计划任务 |
 | 查看自动日志 | 打开自动任务生成的运行日志 |
@@ -67,16 +67,16 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ## 三、快速开始（CLI）
 
 ```powershell
-# 1) 提供账号（当前终端有效，不落盘、不进命令历史）
-$env:SWU_USERNAME = "你的账号"
-$env:SWU_PASSWORD = "你的密码"
-
-# 2) 打卡：登录 → 同步今日任务 → 定位校验 → 提交
+# 打卡：优先复用缓存 Token；过期则弹 Chrome 由你手动输入账号/密码/验证码登录
 py -3.11 login_and_checkin.py --cqtj-checkin
 
 # 环境自检（不发网络请求）
 py -3.11 login_and_checkin.py --env-check
 ```
+
+> 登录默认**人工手动输入**（实测机器瞬填易触发统一认证风控）。若确需机器代填
+> （OCR 验证码），在命令后加 `--auto-login`，并先提供账号：
+> `$env:SWU_USERNAME="账号"; $env:SWU_PASSWORD="密码"`。
 
 常用参数组合：
 
@@ -84,20 +84,26 @@ py -3.11 login_and_checkin.py --env-check
 | --- | --- |
 | `--cqtj-checkin` | 同步今日查寝任务并打卡（已签到 / 越界 / 今日无任务会自动中止，不重复提交） |
 | `--sync-cqtj` | 只同步任务元数据，不提交（验证/调试用） |
-| `--login-only` | 只登录、刷新 Token |
+| `--login-only` | 只登录、刷新 Token（手动模式：弹 Chrome 人工登录后捕获） |
 | `--token xxx` | 用已有 Token 跳过登录 |
+| `--auto-login` | 机器代填登录（逐字拟人输入 + ddddocr 验证码识别），默认不启用 |
+| `--manual-timeout 300` | 手动登录模式等待秒数（默认 300） |
+| `--force-login` | 忽略 token.txt 缓存，强制重新登录 |
 | `--monitor-chrome` | 网络监听模式：抓取 baida 接口并缓存表单元数据（排障用） |
 | `--force-submit` | 即使已签到也强制提交（不建议） |
 
 ## 四、如何填入数据
 
-### 3.1 账号 / 密码（唯一必须填的数据）
+### 3.1 账号 / 密码（登录时由人手动输入）
+
+**默认登录路径**：脚本只负责把 Chrome 导航到学校统一认证登录页，**账号、密码、验证码全部在浏览器里由本人手动输入并点击登录**；脚本仅从登录响应中捕获 Token（存 `token.txt`），有效期内后续打卡不再触发登录。凭据不经命令行、不进环境变量（手动模式下）、不写入任何日志。
+
+其他路径的凭据保存方式：
 
 | 路径 | 填入方式 | 存储位置 |
 | --- | --- | --- |
 | 打卡助手 GUI | 界面输入框；"一次打卡"仅本次使用，"自动打卡"时保存 | 保存后：`%APPDATA%\swu-daka\config.json`（Base64 混淆、非加密） |
-| CLI（推荐） | 环境变量 `SWU_USERNAME` / `SWU_PASSWORD` | 不存储，仅当前进程有效 |
-| CLI（不推荐） | `--username` / `--password` 参数 | 会留在命令历史 |
+| CLI `--auto-login`（可选） | 环境变量 `SWU_USERNAME` / `SWU_PASSWORD` | 不存储，仅当前进程有效 |
 | Web | 页面输入后点"开启每日 21:00 自动打卡" | `checkin-web/data/app.db`（当前临时明文，见已知限制） |
 
 **不要**硬编码进源码、**不要**提交进 Git、**不要**发给任何人。
@@ -141,7 +147,7 @@ C:\kaifa\tool\打卡\
 ├── legacy/                     # ★ 打卡链路核心实现（CLI）
 │   ├── cli.py                  # 命令行参数、主流程编排（登录→同步→打卡）
 │   ├── config.py               # 全部默认值：账号环境变量名、表单 ID、签到位置、登录 URL、钉钉 UA/请求头
-│   ├── browser_login.py        # Chrome CDP 登录：CAS→uaaap→IDM，验证码 OCR（ddddocr）/手动兜底
+│   ├── browser_login.py        # Chrome CDP 登录：CAS→uaaap→IDM，默认人工手动输入（脚本只等 Token）；--auto-login 机器代填+OCR
 │   ├── swu_api.py              # API 链路：用户信息 / 当日任务同步 / getDormitory / verify / form-instance/save
 │   ├── monitor.py              # 网络监听模式：抓取 baida 接口、缓存表单元数据（排障用）
 │   └── common.py               # 环境自检、Chrome profile 管理、缓存、审计日志、敏感脱敏
@@ -233,7 +239,7 @@ npm run dev
 | "任务已签到，不重复提交" | 服务端已记录今日打卡，去官方系统核对；确需强制再加 `--force-submit` |
 | "不在签到范围内" | 你不在签到点附近（默认位置见 `legacy/config.py`），调整位置参数或确认所在位置 |
 | "今日查寝任务为空" | 服务端当天未发布任务（如查询过早），稍后重试 |
-| 验证码识别失败 | ddddocr 自动重试最多 8 次；仍失败则重跑（会弹 Chrome 窗口，可手动处理） |
+| 登录风控/验证码死循环 | 默认手动模式即解（人工输入）；`--auto-login` 已做拟人逐字输入（110~260ms 随机键距）仍失败时，改回手动 |
 | Token 失效 | 无需处理，重跑打卡命令会自动重新登录 |
 | 登录卡在统一认证/IDM 页 | 脚本会等待 60 秒供手动处理；也可先用 `--monitor-chrome` 抓包定位 |
 | 环境问题（缺依赖/端口占用/GBK 乱码等） | [配置.md](配置.md) §8 FAQ |
